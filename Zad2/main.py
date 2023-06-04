@@ -95,7 +95,7 @@ def solve(training_input, training_output, testing_input, testing_output):
     testing_output_tensor = tf.convert_to_tensor((testing_output.astype('float32')) / 10000)
 
     model = tf.keras.Sequential([                                               #liczba epok - 25
-        tf.keras.layers.Dense(64, activation=tf.nn.relu, input_shape=(23,)),    #Warstwa wejściowa - 23 neurony,I warstwa ukryta - 64 neurony, funkcja aktywacyjna to ReLU
+        tf.keras.layers.Dense(64, activation=tf.nn.relu),                       #Warstwa wejściowa - 23 neurony,I warstwa ukryta - 64 neurony, funkcja aktywacyjna to ReLU
         tf.keras.layers.Dense(32, activation=tf.nn.relu),                       #II warstwa ukryta - 32 neurony, funkcja aktywacyjna to ReLU
         tf.keras.layers.Dense(16, activation=tf.nn.relu),                       #III warstwa ukryta - 16 neuronów, funkcja aktywacyjna to ReLU
         tf.keras.layers.Dense(2, activation=tf.nn.sigmoid),                     #Werstwa wyjściowa - 2 neurony, funkcja aktywacyjna to funkcja sigmoidalna
