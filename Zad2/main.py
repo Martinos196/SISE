@@ -1,146 +1,142 @@
+import glob
+import os
 import pandas as pd
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
-from pandas import DataFrame
-from sklearn.metrics import mean_squared_error
 
-rejected_labels = [
-    'Unnamed: 0.1',
+columns = [
     'Unnamed: 0',
     'version',
     'alive',
     'tagId',
     'success',
     'timestamp',
+    'data__tagData__gyro__x',
+    'data__tagData__gyro__y',
+    'data__tagData__gyro__z',
+    'data__tagData__magnetic__x',
+    'data__tagData__magnetic__y',
+    'data__tagData__magnetic__z',
+    'data__tagData__quaternion__x',
+    'data__tagData__quaternion__y',
+    'data__tagData__quaternion__z',
+    'data__tagData__quaternion__w',
+    'data__tagData__linearAcceleration__x',
+    'data__tagData__linearAcceleration__y',
+    'data__tagData__linearAcceleration__z',
     'data__tagData__pressure',
+    'data__tagData__maxLinearAcceleration',
     'data__anchorData',
+    'data__acceleration__x',
+    'data__acceleration__y',
+    'data__acceleration__z',
+    'data__orientation__yaw',
+    'data__orientation__roll',
+    'data__orientation__pitch',
+    'data__metrics__latency',
+    'data__metrics__rates__update',
+    'data__metrics__rates__success',
     'data__coordinates__x',
     'data__coordinates__y',
     'data__coordinates__z',
     'reference__x',
-    'reference__y',
-    'errorCode'
-]
-
-
-def load_xlsx_file(filename):
-    input_data = pd.read_excel(filename)
-    output_data = DataFrame()
-    output_data['reference__x'] = input_data['reference__x']
-    output_data['reference__y'] = input_data['reference__y']
-
-    for index, row in input_data.iterrows():
-        if row['success'] is False:
-            input_data = input_data.drop(index)
-            output_data = output_data.drop(index)
-
-    for column_name in rejected_labels:
-        if column_name in input_data:
-            input_data.pop(column_name)
-
-    return input_data, DataFrame(output_data)
-
-
-def load_training_data(room_number):
-    training_input_data = DataFrame()
-    training_output_data = DataFrame()
-    if room_number == 8:
-        for index in range(1, 226):
-            data = load_xlsx_file('dane/pomiary/F8/f8_stat_' + str(index) + '.xlsx')
-            training_input_data = pd.concat([training_input_data, data[0]])
-            training_output_data = pd.concat([training_output_data, data[1]])
-    if room_number == 10:
-        for index in range(1, 226):
-            data = load_xlsx_file('dane/pomiary/F10/f10_stat_' + str(index) + '.xlsx')
-            training_input_data = pd.concat([training_input_data, data[0]])
-            training_output_data = pd.concat([training_output_data, data[1]])
-    return training_input_data, training_output_data
-
-
-def load_testing_data(room_number):
-    testing_input_data = DataFrame()
-    testing_output_data = DataFrame()
-    if room_number == 8:
-        for index in range(1, 4):
-            data = load_xlsx_file('dane/pomiary/F8/f8_' + str(index) + 'p.xlsx')
-            testing_input_data = pd.concat([testing_input_data, data[0]])
-            testing_output_data = pd.concat([testing_output_data, data[1]])
-    if room_number == 10:
-        for index in range(1, 4):
-            data = load_xlsx_file('dane/pomiary/F10/f10_' + str(index) + 'p.xlsx')
-            testing_input_data = pd.concat([testing_input_data, data[0]])
-            testing_output_data = pd.concat([testing_output_data, data[1]])
-    return testing_input_data, testing_output_data
-
-
-def plot(data):
-    plt.bar(np.arange(0, len(data[0])), data[0], color = 'green' )
-    plt.title('Pierwiastek błędu średniokwadratowego dla zbioru testowego')
-    plt.xlabel('Numer pomiaru')
-    plt.ylabel('RMSE')
-    plt.show()
-
-    plt.bar(np.arange(0, len(data[1])), data[1], color = 'green')
-    plt.title('Średnia arytmetyczna z wag danych wejściowych')
-    plt.xlabel('Indeks kolumny wejściowej')
-    plt.ylabel('Waga kolumny')
-    plt.show()
-
-
-def solve(training_input, training_output, testing_input, testing_output):
-    training_input_tensor = tf.convert_to_tensor((training_input.astype('float32')) / 10000)
-    training_output_tensor = tf.convert_to_tensor((training_output.astype('float32')) / 10000)
-    testing_input_tensor = tf.convert_to_tensor((testing_input.astype('float32')) / 10000)
-    testing_output_tensor = tf.convert_to_tensor((testing_output.astype('float32')) / 10000)
-
-    model = tf.keras.Sequential([                                               #liczba epok - 25
-        tf.keras.layers.Dense(64, activation=tf.nn.relu),                       #Warstwa wejściowa - 23 neurony,I warstwa ukryta - 64 neurony, funkcja aktywacyjna to ReLU
-        tf.keras.layers.Dense(32, activation=tf.nn.relu),                       #II warstwa ukryta - 32 neurony, funkcja aktywacyjna to ReLU
-        tf.keras.layers.Dense(16, activation=tf.nn.relu),                       #III warstwa ukryta - 16 neuronów, funkcja aktywacyjna to ReLU
-        tf.keras.layers.Dense(2, activation=tf.nn.sigmoid),                     #Werstwa wyjściowa - 2 neurony, funkcja aktywacyjna to funkcja sigmoidalna
-    ])
-
-    model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.losses.MeanSquaredError(), metrics=['accuracy'])
-
-    model.fit(training_input_tensor, training_output_tensor, epochs=25)
-    model.evaluate(testing_input_tensor, testing_output_tensor)
-    weights = model.layers[0].get_weights()[0]
-    pr = model.predict(testing_input_tensor)
-    result = (pr * 10000)
-    result_df = DataFrame(result)
-
-    mse = []
-    for index in range(0, len(result_df[0])):
-        mse_xy = mean_squared_error([result_df[0][index], result_df[1][index]],
-                                    [DataFrame(testing_output['reference__x']).iloc[0],
-                                     DataFrame(testing_output['reference__y']).iloc[0]])
-        mse.append(mse_xy)
-
-    mse = np.sqrt(mse)
-    print(mse)
-    print(np.mean(weights, axis=1))
-    plot([mse, np.mean(weights, axis=1)])
-    return mse
-
-
-def save_to_xlsx(filename, data):
-    DataFrame(data).to_excel(filename)
-
+    'reference__y']
 
 if __name__ == '__main__':
-    # Room F8
-    training_input, training_output = load_training_data(8)
-    testing_input, testing_output = load_testing_data(8)
 
-    mse8 = solve(training_input, training_output, testing_input, testing_output)
+    # Odczytanie danych do późniejszego przefiltrowania
+    verif_data = pd.read_excel('./dane/pomiary/F10/f10_random_1p.xlsx')
+    verif_measured_x = verif_data.pop('data__coordinates__x')
+    verif_measured_y = verif_data.pop('data__coordinates__y')
+    verif_reference_x = verif_data.pop('reference__x')
+    verif_reference_y = verif_data.pop('reference__y')
+    verif_measured = pd.concat([verif_measured_x, verif_measured_y], axis=1)
+    verif_reference = pd.concat([verif_reference_x, verif_reference_y], axis=1)
 
-    # Room F10
-    training_input, training_output = load_training_data(10)
-    testing_input, testing_output = load_testing_data(10)
+    # Odczytanie danych potrzebnych do uczenia sieci neuronowej
+    all_files = glob.glob(os.path.join('./dane/pomiary/F10/f10_stat_*.xlsx'))
+    df_from_each_file = (pd.read_excel(f, names=columns) for f in all_files)
+    concatenated_df = pd.concat(df_from_each_file, ignore_index=True)
 
-    mse10 = solve(training_input, training_output, testing_input, testing_output)
+    measured_x = concatenated_df.pop('data__coordinates__x')
+    measured_y = concatenated_df.pop('data__coordinates__y')
+    training_data = pd.concat([measured_x, measured_y], axis=1)
 
-    mse = np.append(mse8, mse10)
+    reference_x = concatenated_df.pop('reference__x')
+    reference_y = concatenated_df.pop('reference__y')
+    reference_data = pd.concat([reference_x, reference_y], axis=1)
 
-    save_to_xlsx("wyniki.xlsx", mse)
+    # Zmiana wszystkich wartosci "nan" na zera
+    verif_measured.fillna(0, inplace=True)
+    verif_reference.fillna(0, inplace=True)
+    training_data.fillna(0, inplace=True)
+    reference_data.fillna(0, inplace=True)
+
+    # Dodanie offsetu dla lepszego odczytu
+    training_data = (training_data.astype('float32') + 2000) / 10000
+    reference_data = (reference_data.astype('float32') + 2000) / 10000
+
+    # Podzial danych treningowych na dane treningowe oraz walidacyjne
+    rowCount = int(len(training_data))
+    training_data_1 = training_data[:(9 * (rowCount//10))]
+    reference_data_1 = reference_data[:(9 * (rowCount//10))]
+    val_data_measured = training_data[(9 * (rowCount//10)):]
+    val_data_reference = reference_data[(9 * (rowCount//10)):]
+    val_data_measured.reset_index(drop=True, inplace=True)
+    val_data_reference.reset_index(drop=True, inplace=True)
+
+    # Dodanie offsetu dla lepszego odczytu
+    verif_measured = (verif_measured.astype('float32') + 2000) / 10000
+    verif_reference = (verif_reference.astype('float32') + 2000) / 10000
+
+    # Utworzenie sieci
+    model = tf.keras.Sequential([                                               #liczba epok - 150
+        tf.keras.layers.Dense(64, activation=tf.nn.relu),                       #I warstwa ukryta - 64 neurony, funkcja aktywacyjna to ReLU
+        tf.keras.layers.Dense(32, activation=tf.nn.relu),                       #II warstwa ukryta - 32 neurony, funkcja aktywacyjna to ReLU
+        tf.keras.layers.Dense(16, activation=tf.nn.relu),                       #III warstwa ukryta - 16 neuronów, funkcja aktywacyjna to ReLU
+        tf.keras.layers.Dense(8, activation=tf.nn.relu),                        #IV warstwa ukryta - 8 neuronów, funkcja aktywacyjna to ReLU
+        tf.keras.layers.Dense(2, activation=tf.nn.sigmoid),                     #Warstwa wyjściowa - 2 neurony, funkcja aktywacyjna to funkcja sigmoidalna
+    ])
+
+    # Kompilacja sieci przy pomocy optymalizatora "Adam"
+    model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.keras.losses.MeanSquaredError(), metrics=['accuracy'])
+
+    # Nauczanie sieci za pomoca danych statycznych
+    model.fit(np.asarray(training_data_1), np.asarray(reference_data_1), epochs=150, batch_size=512,
+              validation_data=(val_data_measured, val_data_reference))
+
+    # Wypisanie wag neuronow
+    model.evaluate(verif_measured, verif_reference, batch_size=512)
+    weights = model.layers[0].get_weights()[0]
+    print(weights)
+
+    # Uzycie nauczonej juz sieci w celu przefiltrowania danych
+    result = model.predict(verif_measured)
+    result = result * 10000 - 2000
+    result_df = pd.DataFrame(result)
+
+    # Ulatwienie dostepu do danych poprzez przekazanie ich do list
+    result_x_array = []
+    result_y_array = []
+    for x, y in result:
+        result_x_array.append(x)
+        result_y_array.append(y)
+    reference_x_array = verif_reference_x.to_list()
+    reference_y_array = verif_reference_y.to_list()
+    measured_x_array = verif_measured_x.to_list()
+    measured_y_array = verif_measured_y.to_list()
+
+    # Blad pomiarowy
+    error_filtered = []
+    error_unfiltered = []
+    for i in range(len(result_x_array)):
+        buff_filtered = (np.sqrt(np.power(result_x_array[i] - reference_x_array[i], 2) + np.power(result_y_array[i] - reference_y_array[i], 2)))
+        buff_unfiltered = (np.sqrt(np.power(measured_x_array[i] - reference_x_array[i], 2) + np.power(measured_y_array[i] - reference_y_array[i], 2)))
+        error_filtered.append(buff_filtered)
+        error_unfiltered.append(buff_unfiltered)
+    result_df['error_filtered'] = error_filtered
+    result_df['error_unfiltered'] = error_unfiltered
+
+    # Wyeksportowanie danych do pliku excel
+    result_df.to_excel('wynik_F10.xlsx', engine='xlsxwriter')
+    print(result)
